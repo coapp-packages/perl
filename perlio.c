@@ -1975,7 +1975,7 @@ PerlIOBytes_pushed(pTHX_ PerlIO *f, const char *mode, SV *arg, PerlIO_funcs *tab
 	while(!(PerlIOBase(current)->tab->kind & PERLIO_K_RAW)) {
 	    /*PerlIO* next = PerlIONext(current);*/
 	    PerlIO_flush(current);
-	    PerlIO_pop(current);
+	    PerlIO_pop(aTHX_ current);
 	    /*current = next; */
 	}
 	PerlIOBase(f)->flags &= ~PERLIO_F_UTF8;
