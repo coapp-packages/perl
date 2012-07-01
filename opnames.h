@@ -388,10 +388,11 @@ typedef enum opcode {
 	OP_COREARGS	 = 371,
 	OP_RUNCV	 = 372,
 	OP_FC		 = 373,
+	OP_PADCV	 = 374,
 	OP_max		
 } opcode;
 
-#define MAXO 374
+#define MAXO 375
 #define OP_FREED MAXO
 
 /* the OP_IS_* macros are optimized to a simple range check because
