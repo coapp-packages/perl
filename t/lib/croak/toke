@@ -3,3 +3,14 @@ __END__
 my sub;
 EXPECT
 Missing name in "my sub" at - line 1.
+########
+# NAME Missing name in "our sub"
+our sub;
+EXPECT
+Missing name in "our sub" at - line 1.
+########
+# NAME Missing name in "state sub"
+use 5.01;
+state sub;
+EXPECT
+Missing name in "state sub" at - line 2.
