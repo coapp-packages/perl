@@ -3757,10 +3757,9 @@ S_intuit_method(pTHX_ char *start, GV *gv, CV *cv)
 
     PERL_ARGS_ASSERT_INTUIT_METHOD;
 
-    if (gv) {
-	if (SvTYPE(gv) == SVt_PVGV && GvIO(gv))
+    if (gv && SvTYPE(gv) == SVt_PVGV && GvIO(gv))
 	    return 0;
-	if (cv) {
+    if (cv) {
 	    if (SvPOK(cv)) {
 		const char *proto = CvPROTO(cv);
 		if (proto) {
@@ -3770,8 +3769,6 @@ S_intuit_method(pTHX_ char *start, GV *gv, CV *cv)
 			return 0;
 		}
 	    }
-	} else
-	    gv = NULL;
     }
     s = scan_word(s, tmpbuf, sizeof tmpbuf, TRUE, &len);
     /* start is the beginning of the possible filehandle/object,
@@ -3780,7 +3777,7 @@ S_intuit_method(pTHX_ char *start, GV *gv, CV *cv)
      */
 
     if (*start == '$') {
-	if (gv || PL_last_lop_op == OP_PRINT || PL_last_lop_op == OP_SAY ||
+	if (cv || PL_last_lop_op == OP_PRINT || PL_last_lop_op == OP_SAY ||
 		isUPPER(*PL_tokenbuf))
 	    return 0;
 #ifdef PERL_MAD
@@ -3807,7 +3804,7 @@ S_intuit_method(pTHX_ char *start, GV *gv, CV *cv)
 	if (indirgv && GvCVu(indirgv))
 	    return 0;
 	/* filehandle or package name makes it a method */
-	if (!gv || GvIO(indirgv) || gv_stashpvn(tmpbuf, len, UTF ? SVf_UTF8 : 0)) {
+	if (!cv || GvIO(indirgv) || gv_stashpvn(tmpbuf, len, UTF ? SVf_UTF8 : 0)) {
 #ifdef PERL_MAD
 	    soff = s - SvPVX(PL_linestr);
 #endif
@@ -6532,12 +6529,18 @@ Perl_yylex(pTHX)
 	bool lex;
 	I32 tmp;
 	SV *sv;
+	CV *cv;
+	PADOFFSET off;
+	OP *rv2cv_op;
 
 	lex = FALSE;
 	orig_keyword = 0;
+	off = 0;
 	sv = NULL;
+	cv = NULL;
 	gv = NULL;
 	gvp = NULL;
+	rv2cv_op = NULL;
 
 	PL_bufptr = s;
 	s = scan_word(s, PL_tokenbuf, sizeof PL_tokenbuf, FALSE, &len);
@@ -6607,11 +6610,11 @@ Perl_yylex(pTHX)
 	/* Check for lexical sub */
 	if (PL_expect != XOPERATOR) {
 	    char tmpbuf[sizeof PL_tokenbuf + 1];
-	    PADOFFSET off;
 	    *tmpbuf = '&';
 	    Copy(PL_tokenbuf, tmpbuf+1, len, char);
 	    off = pad_findmy_pvn(tmpbuf, len+1, UTF ? SVf_UTF8 : 0);
 	    if (off != NOT_IN_PAD) {
+		assert(off); /* we assume this is boolean-true below */
 		if (PAD_COMPNAME_FLAGS_isOUR(off)) {
 		    HV *  const stash = PAD_COMPNAME_OURSTASH(off);
 		    HEK * const stashname = HvNAME_HEK(stash);
@@ -6621,12 +6624,18 @@ Perl_yylex(pTHX)
 				    (UTF ? SV_CATUTF8 : SV_CATBYTES));
 		    gv = gv_fetchsv(sv, GV_NOADD_NOINIT | SvUTF8(sv),
 				    SVt_PVCV);
-		    lex = TRUE;
-		    goto just_a_word;
+		    off = 0;
 		}
-		/* unreachable */
-		else Perl_croak(aTHX_ "\"my sub\" not yet implemented");
+		else {
+		    rv2cv_op = newOP(OP_PADANY, 0);
+		    rv2cv_op->op_targ = off;
+		    rv2cv_op = (OP*)newCVREF(0, rv2cv_op);
+		    cv = (CV *)PAD_SV(off);
+		}
+		lex = TRUE;
+		goto just_a_word;
 	    }
+	    off = 0;
 	}
 
 	if (tmp < 0) {			/* second-class keyword? */
@@ -6688,15 +6697,17 @@ Perl_yylex(pTHX)
 	       earlier ':' case doesn't bypass the initialisation.  */
 	    if (0) {
 	    just_a_word_zero_gv:
+		sv = NULL;
+		cv = NULL;
 		gv = NULL;
 		gvp = NULL;
+		rv2cv_op = NULL;
 		orig_keyword = 0;
+		lex = 0;
 	    }
 	  just_a_word: {
 		int pkgname = 0;
 		const char lastchar = (PL_bufptr == PL_oldoldbufptr ? 0 : PL_bufptr[-1]);
-		OP *rv2cv_op;
-		CV *cv;
 #ifdef PERL_MAD
 		SV *nextPL_nextwhite = 0;
 #endif
@@ -6728,7 +6739,8 @@ Perl_yylex(pTHX)
 		}
 
 		/* Look for a subroutine with this name in current package,
-		   unless name is "Foo::", in which case Foo is a bareword
+		   unless this is a lexical sub, or name is "Foo::",
+		   in which case Foo is a bareword
 		   (and a package name). */
 
 		if (len > 2 && !PL_madskills &&
@@ -6746,7 +6758,7 @@ Perl_yylex(pTHX)
 		    gvp = 0;
 		}
 		else {
-		    if (!gv) {
+		    if (!lex && !gv) {
 			/* Mustn't actually add anything to a symbol table.
 			   But also don't want to "initialise" any placeholder
 			   constants that might already be there into full
@@ -6760,7 +6772,7 @@ Perl_yylex(pTHX)
 
 		/* if we saw a global override before, get the right name */
 
-		if (!lex)
+		if (!sv)
 		  sv = S_newSV_maybe_utf8(aTHX_ PL_tokenbuf,
 		    len ? len : strlen(PL_tokenbuf));
 		if (gvp) {
@@ -6787,12 +6799,13 @@ Perl_yylex(pTHX)
 		if (len)
 		    goto safe_bareword;
 
+		if (!off)
 		{
 		    OP *const_op = newSVOP(OP_CONST, 0, SvREFCNT_inc_NN(sv));
 		    const_op->op_private = OPpCONST_BARE;
 		    rv2cv_op = newCVREF(0, const_op);
+		    cv = lex ? GvCV(gv) : rv2cv_op_cv(rv2cv_op, 0);
 		}
-		cv = lex ? GvCV(gv) : rv2cv_op_cv(rv2cv_op, 0);
 
 		/* See if it's the indirect object for a list operator. */
 
@@ -6879,7 +6892,8 @@ Perl_yylex(pTHX)
 		    }
 		    start_force(PL_curforce);
 #endif
-		    NEXTVAL_NEXTTOKE.opval = pl_yylval.opval;
+		    NEXTVAL_NEXTTOKE.opval =
+			off ? rv2cv_op : pl_yylval.opval;
 		    PL_expect = XOPERATOR;
 #ifdef PERL_MAD
 		    if (PL_madskills) {
@@ -6888,8 +6902,9 @@ Perl_yylex(pTHX)
 			PL_thistoken = newSVpvs("");
 		    }
 #endif
-		    op_free(rv2cv_op);
-		    force_next(WORD);
+		    if (off)
+			 op_free(pl_yylval.opval), force_next(PRIVATEREF);
+		    else op_free(rv2cv_op),	   force_next(WORD);
 		    pl_yylval.ival = 0;
 		    TOKEN('&');
 		}
@@ -7004,7 +7019,7 @@ Perl_yylex(pTHX)
 			    curmad('X', PL_thistoken);
 			    PL_thistoken = newSVpvs("");
 			}
-			force_next(WORD);
+			force_next(off ? PRIVATEREF : WORD);
 			if (!PL_lex_allbrackets &&
 				PL_lex_fakeeof > LEX_FAKEEOF_LOWLOGIC)
 			    PL_lex_fakeeof = LEX_FAKEEOF_LOWLOGIC;
@@ -7047,7 +7062,7 @@ Perl_yylex(pTHX)
 			PL_nextwhite = nextPL_nextwhite;
 			curmad('X', PL_thistoken);
 			PL_thistoken = newSVpvs("");
-			force_next(WORD);
+			force_next(off ? PRIVATEREF : WORD);
 			if (!PL_lex_allbrackets &&
 				PL_lex_fakeeof > LEX_FAKEEOF_LOWLOGIC)
 			    PL_lex_fakeeof = LEX_FAKEEOF_LOWLOGIC;
@@ -7056,7 +7071,7 @@ Perl_yylex(pTHX)
 #else
 		    NEXTVAL_NEXTTOKE.opval = pl_yylval.opval;
 		    PL_expect = XTERM;
-		    force_next(WORD);
+		    force_next(off ? PRIVATEREF : WORD);
 		    if (!PL_lex_allbrackets &&
 			    PL_lex_fakeeof > LEX_FAKEEOF_LOWLOGIC)
 			PL_lex_fakeeof = LEX_FAKEEOF_LOWLOGIC;
