@@ -2633,8 +2633,12 @@ PP(pp_entersub)
 	SV* sub_name;
 
 	/* anonymous or undef'd function leaves us no recourse */
-	if (CvANON(cv) || !(gv = CvGV(cv)))
+	if (CvANON(cv) || !(gv = CvGV(cv))) {
+	    if (CvNAMED(cv))
+		DIE(aTHX_ "Undefined subroutine &%"HEKf" called",
+			   HEKfARG(CvNAME_HEK(cv)));
 	    DIE(aTHX_ "Undefined subroutine called");
+	}
 
 	/* autoloaded stub? */
 	if (cv != GvCV(gv)) {
