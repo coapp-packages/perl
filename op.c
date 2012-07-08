@@ -6917,12 +6917,8 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     U32 ps_utf8 = 0;
     register CV *cv = NULL;
     register CV *compcv = PL_compcv;
-    CV *outside;
     SV *const_sv;
-    STRLEN namlen;
     SV *namesv;
-    const char *name;
-    bool name_is_utf8;
 
     PERL_ARGS_ASSERT_NEWMYSUB;
 
