@@ -506,7 +506,10 @@ typedef U16 cv_flags_t;
 	OP *	xcv_root;							\
 	void	(*xcv_xsub) (pTHX_ CV*);					\
     }		xcv_root_u;							\
-    GV *	xcv_gv;								\
+    union {								\
+	GV *	xcv_gv;							\
+	HEK *	xcv_hek;						\
+    }		xcv_gv_u;						\
     char *	xcv_file;							\
     AV *	xcv_padlist;							\
     CV *	xcv_outside;							\

@@ -1449,7 +1449,11 @@ MODULE = B	PACKAGE = B::IV
 #define PVFM_lines_ix	sv_IVp | offsetof(struct xpvfm, xfm_lines)
 
 #define PVCV_stash_ix	sv_SVp | offsetof(struct xpvcv, xcv_stash) 
-#define PVCV_gv_ix	sv_SVp | offsetof(struct xpvcv, xcv_gv)
+#if PERL_VERSION > 17 || (PERL_VERSION == 17 && PERL_SUBVERSION >= 2)
+# define PVCV_gv_ix	sv_SVp | offsetof(struct xpvcv, xcv_gv_u.xcv_gv)
+#else
+# define PVCV_gv_ix	sv_SVp | offsetof(struct xpvcv, xcv_gv)
+#endif
 #define PVCV_file_ix	sv_char_pp | offsetof(struct xpvcv, xcv_file)
 #define PVCV_depth_ix	sv_I32p | offsetof(struct xpvcv, xcv_depth)
 #define PVCV_padlist_ix	sv_SVp | offsetof(struct xpvcv, xcv_padlist)
