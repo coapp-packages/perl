@@ -6772,8 +6772,13 @@ Perl_cv_ckproto_len_flags(pTHX_ const CV *cv, const GV *gv, const char *p,
 	SV* const msg = sv_newmortal();
 	SV* name = NULL;
 
-	if (gv)
+	if (gv) {
+	  if (isGV(gv))
 	    gv_efullname3(name = sv_newmortal(), gv, NULL);
+	  else
+	    name = newSVpvn_flags(SvPVX((SV *)gv)+1, SvCUR(gv)-1,
+				  SvUTF8(gv)|SVs_TEMP);
+	}
 	sv_setpvs(msg, "Prototype mismatch:");
 	if (name)
 	    Perl_sv_catpvf(aTHX_ msg, " sub %"SVf, SVfARG(name));
@@ -6905,7 +6910,6 @@ CV *
 Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 {
     dVAR;
-    GV *gv;
     CV **spot;
     SV **svspot;
     const char *ps;
@@ -6916,14 +6920,6 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     CV *outside;
     SV *const_sv;
     const bool ec = PL_parser && PL_parser->error_count;
-
-    /* If the subroutine has no body, no attributes, and no builtin attributes
-       then it's just a sub declaration, and we may be able to get away with
-       storing with a placeholder scalar in the symbol table, rather than a
-       full CV.  If anything is present then it will take a full CV to
-       store it.  */
-    const I32 gv_fetch_flags
-	= ec ? GV_NOADD_NOINIT : GV_ADD;
     STRLEN namlen;
     SV *namesv;
     const char *name;
@@ -6949,9 +6945,6 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     }
     else
 	ps = NULL;
-
-    gv = gv_fetchpvn_flags(SvPVX(namesv)+1, SvCUR(namesv)-1,
-			   SvUTF8(namesv)|gv_fetch_flags, SVt_PVCV);
 
     if (!PL_madskills) {
 	if (o)
@@ -7011,7 +7004,7 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
          * skipping the prototype check
          */
         if (exists || SvPOK(cv))
-            cv_ckproto_len_flags(cv, gv, ps, ps_len, ps_utf8);
+            cv_ckproto_len_flags(cv, (GV *)namesv, ps, ps_len, ps_utf8);
 	/* already defined? */
 	if (exists) {
 	    if ((!block
@@ -7094,12 +7087,12 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	    OP * const cvstart = CvSTART(cv);
 
 	    assert(CvWEAKOUTSIDE(cv));
-	    assert(CvCVGV_RC(cv));
-	    assert(CvGV(cv) == gv);
+	    assert(CvNAMED(cv));
+	    assert(CvNAME_HEK(cv));
 
 	    SvPOK_off(cv);
 	    CvFLAGS(cv) =
-		CvFLAGS(compcv) | existing_builtin_attrs | CVf_CVGV_RC;
+		CvFLAGS(compcv) | existing_builtin_attrs | CVf_NAMED;
 	    CvOUTSIDE(cv) = CvOUTSIDE(compcv);
 	    CvOUTSIDE_SEQ(cv) = CvOUTSIDE_SEQ(compcv);
 	    CvPADLIST(cv) = CvPADLIST(compcv);
@@ -7130,7 +7123,10 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
     else {
 	cv = compcv;
 	*spot = cv;
-	CvGV_set(cv, gv);
+	SvANY(cv)->xcv_gv_u.xcv_hek =
+	    share_hek(SvPVX(namesv)+1,
+		      SvCUR(namesv)-1 * (SvUTF8(namesv) ? -1 : 1), 0);
+	CvNAMED_on(cv);
     }
     CvFILE_set_from_cop(cv, PL_curcop);
     CvSTASH_set(cv, PL_curstash);
@@ -7211,7 +7207,13 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 					  CopFILE(PL_curcop),
 					  (long)PL_subline,
 					  (long)CopLINE(PL_curcop));
-	    gv_efullname3(tmpstr, gv, NULL);
+	    if (HvNAME_HEK(PL_curstash)) {
+		sv_sethek(tmpstr, HvNAME_HEK(PL_curstash));
+		sv_catpvs(tmpstr, "::");
+	    }
+	    else sv_setpvs(tmpstr, "__ANON__::");
+	    sv_catpvn_flags(tmpstr, SvPVX(namesv)+1, SvCUR(namesv)-1,
+			    SvUTF8(namesv) ? SV_CATUTF8 : SV_CATBYTES);
 	    (void)hv_store(GvHV(PL_DBsub), SvPVX_const(tmpstr),
 		    SvUTF8(tmpstr) ? -(I32)SvCUR(tmpstr) : (I32)SvCUR(tmpstr), sv, 0);
 	    hv = GvHVn(db_postponed);
