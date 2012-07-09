@@ -1090,7 +1090,7 @@ the parent pad.
 #define CvCOMPILED(cv)	CvROOT(cv)
 
 /* the CV does late binding of its lexicals */
-#define CvLATE(cv) (CvANON(cv) || SvTYPE(cv) == SVt_PVFM)
+#define CvLATE(cv) (CvANON(cv) || CvCLONE(cv) || SvTYPE(cv) == SVt_PVFM)
 
 
 STATIC PADOFFSET
@@ -1908,7 +1908,7 @@ the immediately surrounding code.
 */
 
 CV *
-Perl_cv_clone(pTHX_ CV *proto)
+S_cv_clone(pTHX_ CV *proto, CV *cv, CV *outside)
 {
     dVAR;
     I32 ix;
@@ -1919,10 +1919,9 @@ Perl_cv_clone(pTHX_ CV *proto)
     SV** const ppad = AvARRAY(protopad);
     const I32 fname = AvFILLp(protopad_name);
     const I32 fpad = AvFILLp(protopad);
-    CV* cv;
     SV** outpad;
-    CV* outside;
     long depth;
+    bool subclones = FALSE;
 
     PERL_ARGS_ASSERT_CV_CLONE;
 
@@ -1936,9 +1935,10 @@ Perl_cv_clone(pTHX_ CV *proto)
      * to a prototype; we instead want the cloned parent who called us.
      */
 
-    if (SvTYPE(proto) == SVt_PVCV)
+    if (!outside) {
+      if (SvTYPE(proto) == SVt_PVCV)
 	outside = find_runcv(NULL);
-    else {
+      else {
 	outside = CvOUTSIDE(proto);
 	if (CvCLONE(outside) && ! CvCLONED(outside)) {
 	    CV * const runcv = find_runcv_where(
@@ -1946,9 +1946,10 @@ Perl_cv_clone(pTHX_ CV *proto)
 	    );
 	    if (runcv) outside = runcv;
 	}
+      }
     }
     depth = CvDEPTH(outside);
-    assert(depth || SvTYPE(proto) == SVt_PVFM);
+    assert(depth || cv || SvTYPE(proto) == SVt_PVFM);
     if (!depth)
 	depth = 1;
     assert(CvPADLIST(outside) || SvTYPE(proto) == SVt_PVFM);
@@ -1956,7 +1957,8 @@ Perl_cv_clone(pTHX_ CV *proto)
     ENTER;
     SAVESPTR(PL_compcv);
 
-    cv = PL_compcv = MUTABLE_CV(newSV_type(SvTYPE(proto)));
+    if (!cv) cv = MUTABLE_CV(newSV_type(SvTYPE(proto)));
+    PL_compcv = cv;
     CvFLAGS(cv) = CvFLAGS(proto) & ~(CVf_CLONE|CVf_WEAKOUTSIDE|CVf_CVGV_RC
 				    |CVf_SLABBED);
     CvCLONED_on(cv);
@@ -2012,7 +2014,16 @@ Perl_cv_clone(pTHX_ CV *proto)
 	    if (!sv) {
                 const char sigil = SvPVX_const(namesv)[0];
                 if (sigil == '&')
-		    sv = SvREFCNT_inc(ppad[ix]);
+		    /* If there are state subs, we need to clone them, too.
+		       But they may need to close over variables we have
+		       not cloned yet.  So we will have to do a second
+		       pass.  Furthermore, there may be state subs clos-
+		       ing over other state subs’ entries, so we have
+		       to put a stub here and then clone into it on the
+		       second pass. */
+		    sv = SvPAD_STATE(namesv) && !CvCLONED(ppad[ix])
+			? (subclones = 1, newSV_type(SvTYPE(proto)))
+			: SvREFCNT_inc(ppad[ix]);
                 else if (sigil == '@')
 		    sv = MUTABLE_SV(newAV());
                 else if (sigil == '%')
@@ -2021,7 +2032,7 @@ Perl_cv_clone(pTHX_ CV *proto)
 		    sv = newSV(0);
 		SvPADMY_on(sv);
 		/* reset the 'assign only once' flag on each state var */
-		if (SvPAD_STATE(namesv))
+		if (sigil != '&' && SvPAD_STATE(namesv))
 		    SvPADSTALE_on(sv);
 	    }
 	}
@@ -2034,6 +2045,14 @@ Perl_cv_clone(pTHX_ CV *proto)
 	}
 	PL_curpad[ix] = sv;
     }
+
+    if (subclones)
+	for (ix = fpad; ix > 0; ix--) {
+	    SV* const namesv = (ix <= fname) ? pname[ix] : NULL;
+	    if (namesv && namesv != &PL_sv_undef && !SvFAKE(namesv)
+	     && SvPVX_const(namesv)[0] == '&' && SvPAD_STATE(namesv))
+		S_cv_clone(aTHX_ (CV *)ppad[ix], (CV *)PL_curpad[ix], cv);
+	}
 
     DEBUG_Xv(
 	PerlIO_printf(Perl_debug_log, "\nPad CV clone\n");
@@ -2061,6 +2080,12 @@ Perl_cv_clone(pTHX_ CV *proto)
     }
 
     return cv;
+}
+
+CV *
+Perl_cv_clone(pTHX_ CV *proto)
+{
+    return S_cv_clone(aTHX_ proto, NULL, NULL);
 }
 
 /*
