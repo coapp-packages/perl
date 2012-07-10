@@ -6922,15 +6922,15 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 
     PERL_ARGS_ASSERT_NEWMYSUB;
 
-    /* PL_comppad is the pad owned by the new sub.  Popping scope will make
-       the PL_comppad point to the pad belonging to the enclosing sub,
-       where we store the new one. */
-    LEAVE_SCOPE(floor);
-
-    namesv = AvARRAY(PL_comppad_name)[o->op_targ];
+    /* PL_comppad is the pad owned by the new sub.  We need to look in
+       CvOUTSIDE and find the pad belonging to the enclosing sub, where we
+       store the new one. */
+    namesv =
+	AvARRAY(AvARRAY(CvPADLIST(CvOUTSIDE(PL_compcv)))[0])[o->op_targ];
     if (!SvPAD_STATE(namesv))
 	Perl_croak(aTHX_ "\"my sub\" not yet implemented");
-    svspot = &PL_curpad[o->op_targ];
+    svspot =
+	&AvARRAY(AvARRAY(CvPADLIST(CvOUTSIDE(PL_compcv)))[1])[o->op_targ];
     spot = (CV **)svspot;
 
     if (proto) {
@@ -6942,8 +6942,6 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	ps = NULL;
 
     if (!PL_madskills) {
-	if (o)
-	    SAVEFREEOP(o);
 	if (proto)
 	    SAVEFREEOP(proto);
 	if (attrs)
@@ -7068,6 +7066,7 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	    goto install_block;
 	op_free(block);
 	SvREFCNT_dec(compcv);
+	PL_compcv = NULL;
 	goto done;
     }
     SvREFCNT_dec(CvOUTSIDE(compcv));
@@ -7117,7 +7116,7 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 	}
 	/* ... before we throw it away */
 	SvREFCNT_dec(compcv);
-	compcv = cv;
+	PL_compcv = compcv = cv;
     }
     else {
 	cv = compcv;
@@ -7175,14 +7174,7 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
 
     /* now that optimizer has done its work, adjust pad values */
 
-    ENTER;
-    SAVESPTR(PL_compcv);
-    SAVECOMPPAD();
-    PL_compcv	= cv;
-    PL_comppad	= (AV *)AvARRAY(CvPADLIST(cv))[1];
-    PL_curpad	= AvARRAY(PL_comppad);
     pad_tidy(CvCLONE(cv) ? padtidy_SUBCLONE : padtidy_SUB);
-    LEAVE;
 
     if (CvCLONE(cv)) {
 	assert(!CvCONST(cv));
@@ -7232,6 +7224,8 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
   done:
     if (PL_parser)
 	PL_parser->copline = NOLINE;
+    LEAVE_SCOPE(floor);
+    if (o) op_free(o);
     return cv;
 }
 
