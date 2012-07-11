@@ -6927,8 +6927,6 @@ Perl_newMYSUB(pTHX_ I32 floor, OP *o, OP *proto, OP *attrs, OP *block)
        store the new one. */
     namesv =
 	AvARRAY(AvARRAY(CvPADLIST(CvOUTSIDE(PL_compcv)))[0])[o->op_targ];
-    if (!SvPAD_STATE(namesv))
-	Perl_croak(aTHX_ "\"my sub\" not yet implemented");
     svspot =
 	&AvARRAY(AvARRAY(CvPADLIST(CvOUTSIDE(PL_compcv)))[1])[o->op_targ];
     spot = (CV **)svspot;
