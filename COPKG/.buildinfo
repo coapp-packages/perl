@@ -1,0 +1,270 @@
+#define {
+    NewVersion : "${package-version++}";
+}
+
+#product-info  {
+    product-name: "Perl";
+    version: "5.16";
+    original-source-location: "git://perl5.git.perl.org/perl.git";
+    original-source-website: "http://www.perl.org/get.html#win32";
+    license: "GPL";
+    packager: "Petter Strandmark";
+}
+
+
+test {
+	default: false;
+// Temporarily disabling this.
+	set: TEST=true;
+	uses: release;
+};
+
+release {
+	set: {
+		CONF="Release";
+		INSTALL="${INSTALL??p:}";
+		TEST="${TEST??false}";
+		CLEAN="${CLEAN??true}";
+	};
+	uses: base;
+};
+
+debug {
+	default: false;
+	set: CONF="Debug";
+	uses: base;
+};
+
+base {
+	default: false;
+	set: {
+//		COMP="${COMP??vc6, vc10}";
+		COMP="${COMP??vc10}";
+		PLAT="${PLAT??x86}";
+		TEST="${TEST??false}";
+		CLEAN="${CLEAN??true}";
+	};
+	
+	build-command: @"
+		for %%A in (${COMP}) do (
+			for %%B in (${PLAT}) do (
+				ptk --nologo make-perl --COMP=%%A --PLAT=%%B --TEST=${TEST} --CONF=${CONF} && ( if ""${CLEAN}""==""true"" ptk --nologo clean make-perl --COMP=%%A --PLAT=%%B ) || goto failed
+			)
+		)
+	";
+};
+
+package {
+	default: false;
+	set: {
+		BUILT="${BUILT??false}";
+//		COMP="${COMP??vc6, vc10}";
+		COMP="${COMP??vc10}";
+		PLAT="${PLAT??x86}";
+		CLEAN="${CLEAN??true}";
+		INSTALL="${INSTALL??p:}";
+		REN="${REN??true}";
+	};
+	uses: update-version;
+    targets: { 
+        (COMP,PLAT) => "perl-monolithic[${0}]-${NewVersion}-${1}.msi",
+    };
+/*  old build command...
+	build-command: @"
+		if ""${BUILT}"" neq ""true"" ptk release
+		pushd COPKG
+        coapp -A ""%cd%""
+		autopackage perl-dev-common.autopkg
+        coapp --force-scan -l
+		for %%A in (${COMP}) do (
+			for %%B in (${PLAT}) do (
+				
+				autopackage perl.autopkg perl-dev.autopkg --PLAT=%%B --COMP=%%A
+			)
+		)
+        coapp -R ""%cd%""
+		popd
+	";
+*/
+// Temp build command (until I get this seperated into 'core' and 'module' packages)
+	build-command: @"
+		if ""${BUILT}"" neq ""true"" ptk --nologo release
+		pushd COPKG
+		for %%A in (${COMP}) do (
+			for %%B in (${PLAT}) do (
+				if ""${REN}""==""true"" ptk --nologo pack-prep --PLAT=%%B --COMP=%%A
+				autopackage perl-monolithic.autopkg --plat=%%B --comp=%%A
+			)
+		)
+		popd
+	";
+};
+
+update-version {
+    default : false;
+    
+    build-command : @"
+        if ""${noversion}"" equ ""true"" goto endver
+        pushd COPKG
+        setlocal EnableDelayedExpansion
+        set VERSTRING=#define { package-version: ${NewVersion}; }
+        echo !VERSTRING! > version.inc
+        popd
+        :endver
+    ";
+}
+
+
+pack-prep {
+	build-command: @"
+		pushd output\${COMP}\${PLAT}\Release\perl
+		
+		echo Renaming interior directories...
+		pushd lib
+		ren MSWin32-${PLAT}-multi-thread Win-${PLAT}
+		popd
+		pushd bin
+		ren MSWin32-${PLAT}-multi-thread Win-${PLAT}
+		echo Rewriting generated batch files...
+        for /F %%F in ('dir /b *.bat') do (
+            powershell -command ""(cat %%F) | %% {$_ -replace '${INSTALL}\\perl\\bin\\MSWin32-${PLAT}-multi-thread\\perl.exe', '\""%%ProgramData%%\bin\perl.exe\""'} | sc %%F""
+        )
+		
+		popd
+		
+		popd
+	";
+};
+
+x86 {
+	default: false;
+	set: PLAT="${PLATT??x86}";
+	uses: make-perl;
+};
+
+x64 {
+	default: false;
+	set: PLAT="${PLATT??x64}";
+	uses: make-perl;
+};
+
+make-perl {
+	default: false;
+	set: {
+		CONF="${CONF??Debug}";
+		TEST="${TEST??false}";
+		COMP="${COMP??vc10}";
+		PLAT="${PLATT??x86}";
+	};
+	
+	compiler: "${COMP}";
+	platform: "${PLAT}";
+	
+	targets: { 
+	/*
+				"output\${COMP}\${PLAT}\${CONF}\perl514.dll",
+				"output\${COMP}\${PLAT}\${CONF}\perl514.lib",
+				"output\${COMP}\${PLAT}\${CONF}\perl514s.lib",
+				"output\${COMP}\${PLAT}\${CONF}\perl.exe",
+				"output\${COMP}\${PLAT}\${CONF}\wperl.exe",
+				"output\${COMP}\${PLAT}\${CONF}\miniperl.exe",
+				"output\${COMP}\${PLAT}\${CONF}\perl-static.exe",
+				"output\${COMP}\${PLAT}\${CONF}\perlglob.exe",
+	*/
+	} ;
+
+	build-command: @"
+		REM Unset the 'cl' variable, as it's useless for this build, and makes vc6 fail...
+		set cl=
+		REM Set known part of build command...
+        REM set _coapp_bld=INST_ARCH=\$(ARCHNAME) BUILD_STATIC=define ALL_STATIC=define ${SWITCHES??}
+		set _coapp_bld=BUILD_STATIC=undef ALL_STATIC=undef ${SWITCHES??}
+		if ""${PLAT}""==""x64"" (
+			call :SET_x64
+		) else (
+			call :SET_x86
+		)
+		
+		if not defined MSVCDIR set _coapp_bld=%_coapp_bld% CCHOME=$(VCINSTALLDIR)
+		if ""${CONF}""==""Debug"" set _coapp_bld=%_coapp_bld% CFG=DEBUG
+		
+		REM determine compiler to specify
+		if ""${COMP}""==""vc6"" set _coapp_bld=%_coapp_bld% CCType=MSVC60
+		if ""${COMP}""==""vc7.1"" set _coapp_bld=%_coapp_bld% CCType=MSVC70
+		if ""${COMP}""==""vc8"" set _coapp_bld=%_coapp_bld% CCType=MSVC80
+		if ""${COMP}""==""vc9"" set _coapp_bld=%_coapp_bld% CCType=MSVC90
+		if ""${COMP}""==""vc10"" set _coapp_bld=%_coapp_bld% CCType=MSVC100
+		
+		if defined INSTALL call :DRIVE
+
+		if defined DRYRUN goto :DRY_RUN
+		
+		pushd win32
+		nmake %_coapp_bld% || goto failed
+		if ""${TEST}""==""true"" nmake test || goto failed
+		popd
+        
+		
+		REM We only need to copy these files if we're not running an install
+		if not defined INSTALL (
+			REM make output location
+			mkdir .\output\${COMP}\${PLAT}\${CONF}\
+			REM copy files to output location
+			copy /Y .\perl.exe output\${COMP}\${PLAT}\${CONF}\
+			copy /Y .\wperl.exe output\${COMP}\${PLAT}\${CONF}\
+			copy /Y .\miniperl.exe output\${COMP}\${PLAT}\${CONF}\
+			copy /Y .\perl-static.exe output\${COMP}\${PLAT}\${CONF}\
+			copy /Y .\perlglob.exe output\${COMP}\${PLAT}\${CONF}\
+			
+			copy /Y .\perl514.dll output\${COMP}\${PLAT}\${CONF}\
+			copy /Y .\perl514.lib output\${COMP}\${PLAT}\${CONF}\
+			copy /Y .\perl514s.lib output\${COMP}\${PLAT}\${CONF}\
+
+			copy /Y .\EXTERN.h output\${COMP}\${PLAT}\${CONF}\
+			copy /Y .\INTERN.h output\${COMP}\${PLAT}\${CONF}\
+			copy /Y .\perl.h output\${COMP}\${PLAT}\${CONF}\
+		)
+		REM Remember to unset the drive if we were installing...
+		if defined INSTALL call :UNDRIVE
+		REM Jump past all of my internal labels...
+		goto :PERL_DONE
+		
+		:DRIVE
+		set _coapp_bld=%_coapp_bld% INST_DRV=${INSTALL} install
+		mkdir output\${COMP}\${PLAT}\${CONF}
+		subst ${INSTALL} .\output\${COMP}\${PLAT}\${CONF}
+		goto :eof
+
+		:UNDRIVE
+		subst ${INSTALL} /D
+		goto :eof
+		
+		:SET_x86
+		set _coapp_bld=%_coapp_bld% WIN64=undef
+		goto :eof
+		
+		:SET_x64
+		set _coapp_bld=%_coapp_bld% WIN64=define
+		goto :eof
+		
+		:DRY_RUN
+		echo %_coapp_bld%
+		pushd win32
+		nmake /N %_coapp_bld%
+		popd
+		if defined INSTALL call :UNDRIVE
+		
+		:PERL_DONE
+	";
+	
+	clean-command: @"
+		pushd win32
+		nmake clean
+		del *.pdb
+		popd
+		pushd x2p
+		del *.pdb
+		popd
+		del *.pdb
+	";
+};

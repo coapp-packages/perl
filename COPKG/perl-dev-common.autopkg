@@ -1,0 +1,47 @@
+@import "version.inc" ;
+@import "outercurve.inc" ;
+
+package {
+    name: "perl-dev-common";
+    version: "${package-version}";
+    arch: any;
+    
+    display-name: "Perl dev library-common";
+}
+
+metadata {
+    summary: "Perl dev library-common";
+    icon: @"..\win32\perlexe.ico";
+    author-version : "5.14.2";
+    bug-tracker: "https://github.com/coapp-packages/perl/issues";
+    stability : "-10";
+    licenses : {
+        GPL1
+    };
+}
+
+license[GPL1] {
+    license-url: "http://perldoc.perl.org/perlgpl.html";
+    license-type: "GPL-1.0";
+}
+
+files[headers] {
+    root: "..\\";
+    include: {
+        "INTERN.h",
+        "EXTERN.h",
+        "perl.h",
+    };
+    
+    trim-path:minimal;
+    
+    // ensures that all the header files end up in a subfolder called 'include'
+    destination-path:"include";
+}
+
+// the 'name' of the developer library isn't terribly important...
+developer-library[perl] {
+    headers: { 
+        headers
+    };
+}

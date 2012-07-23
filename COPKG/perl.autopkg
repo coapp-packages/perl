@@ -1,0 +1,113 @@
+@import "version.inc";
+@import "outercurve.inc";
+
+#define { 
+    flavor: "${COMP??vc10}"; 
+    arch : "${PLAT??x86}";
+}
+
+package {
+    name: "perl[${flavor}]";
+    version: "${package-version}";
+    arch : "${arch}";
+    
+    display-name: "Perl 5.14";
+    location: "http://coapp.org/repository/${OutputFilename}";
+
+    feed: "http://coapp.org/repository/packages.atom.xml";
+    publisher: "CoApp Project";
+}
+
+files[exes] {
+    root: @"..\output\${flavor}\${arch}";
+    
+    include: {
+				"perl.exe",
+				"wperl.exe",
+				"miniperl.exe",
+				"perl-static.exe",
+				"perlglob.exe",
+    };
+    
+    trim-path: all;
+};
+
+files[dlls] {
+    root: @"..\output\${flavor}\${arch}";
+  
+    include: {
+				"perl514.dll",
+    };
+    
+    trim-path: all;
+};
+
+license[GPL1] {
+    license-url: "http://perldoc.perl.org/perlgpl.html";
+    license-type: "GPL-1.0";
+}
+
+provides {
+    feature: "perl" = "5.14.2";
+}
+
+compatability-policy {
+    minimum: "5.14.0.0";
+    maximum: "${OneLessThanCurrent}"; // this is the default
+    versions : { 
+        "5.14"
+    };
+}
+
+metadata {
+    summary: "Perl";
+    icon: @"..\win32\perlexe.ico";
+
+    author-version : "5.14.2";
+    bug-tracker: "https://github.com/coapp-packages/perl/issues";
+    stability : "-10";
+    licenses : {
+        GPL1
+    };
+}
+
+application {
+    include : {
+        exes,
+    };
+}
+
+assembly[perl] {
+    include : {
+        dlls
+    };
+}
+
+manifest[things-that-need-them] {
+    // all of our EXEs need to get the manifest entries for the assemblies we're creating in this package
+    
+    assembly : {
+        perl
+    };
+    
+    include : { 
+        exes
+    };
+}
+
+package-composition {
+    symlinks : { 
+        exes => @"${bin}\${each.Name}" = @"${packagedir}\${each.Name}";
+    };
+    
+    
+    registry : {
+        @"Perl" = @"{packagedir}",
+        @"Perl#BinDir" = @"{packagedir}",
+        @"SysWow64\Perl" = @"{packagedir}",
+        @"SysWow64\Perl#BinDir" = @"{packagedir}",
+    };
+    
+}
+
+

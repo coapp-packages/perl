@@ -1,0 +1,60 @@
+@import "version.inc";
+@import "outercurve.inc";
+
+#define { 
+    flavor: "${COMP??vc10}"; 
+    arch : "${PLAT??x86}";
+}
+
+package {
+    name: "perl[${flavor}]-dev";
+    version: "${package-version}";
+    arch : "${arch}";
+    
+    display-name: "Perl Developer Libraries";
+}
+
+metadata {
+    summary: "Perl dev library";
+    icon: @"..\win32\perlexe.ico";
+    author-version : "5.14.2";
+    bug-tracker: "https://github.com/coapp-packages/perl/issues";
+    stability : "-10";
+    licenses : {
+        GPL1
+    };
+}
+
+license[GPL1] {
+    license-url: "http://perldoc.perl.org/perlgpl.html";
+    license-type: "GPL-1.0";
+}
+
+compatability-policy {
+    minimum: "5.14.0.0";
+    maximum: "${OneLessThanCurrent}"; // this is the default
+    versions : { 
+        "5.14"
+    };
+}
+
+requires {
+    package: "perl-dev-common-${package-version}-any-${Package.PublicKeyToken}";
+    package: "perl[${flavor}]-${package-version}-${Package.Architecture}-${Package.PublicKeyToken}";
+}
+
+files[libs] {
+    root: @"..\output\${flavor}\${arch}";
+  
+    include: {
+        "*.lib"
+    };
+    
+    trim-path:minimal;
+};
+
+developer-library[perl] {
+    libraries : {
+        libs
+    };
+}

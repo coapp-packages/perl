@@ -20,7 +20,7 @@
 # Set these to wherever you want "nmake install" to put your
 # newly built perl.
 #
-INST_DRV	= c:
+#INST_DRV	= c:
 INST_TOP	= $(INST_DRV)\perl
 
 #
@@ -96,7 +96,7 @@ USE_LARGE_FILES	= define
 # uncomment exactly one of the following
 #
 # Visual C++ 6.x (aka Visual C++ 98)
-CCTYPE		= MSVC60
+#CCTYPE		= MSVC60
 # Visual C++ Toolkit 2003 (aka Visual C++ 7.x) (free command-line tools)
 #CCTYPE		= MSVC70FREE
 # Visual C++ .NET 2003 (aka Visual C++ 7.x) (full version)
