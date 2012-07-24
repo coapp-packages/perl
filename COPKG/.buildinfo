@@ -1,3 +1,5 @@
+@import "version.inc";
+
 #define {
     NewVersion : "${package-version++}";
 }
@@ -67,7 +69,7 @@ package {
 	};
 	uses: update-version;
     targets: { 
-        (COMP,PLAT) => "perl-monolithic[${0}]-${NewVersion}-${1}.msi",
+        (COMP,PLAT) => @"COPKG\perl-monolithic[${0}]-${NewVersion}-${1}.msi",
     };
 /*  old build command...
 	build-command: @"
@@ -93,7 +95,8 @@ package {
 		for %%A in (${COMP}) do (
 			for %%B in (${PLAT}) do (
 				if ""${REN}""==""true"" ptk --nologo pack-prep --PLAT=%%B --COMP=%%A
-				autopackage perl-monolithic.autopkg --plat=%%B --comp=%%A
+REM				autopackage perl-monolithic.autopkg --plat=%%B --comp=%%A
+				autopackage perl-monolithic2.autopkg --plat=%%B --comp=%%A
 			)
 		)
 		popd
@@ -120,14 +123,15 @@ pack-prep {
 		pushd output\${COMP}\${PLAT}\Release\perl
 		
 		echo Renaming interior directories...
-		pushd lib
-		ren MSWin32-${PLAT}-multi-thread Win-${PLAT}
-		popd
+REM		pushd lib
+REM		ren MSWin32-${PLAT}-multi-thread Win-${PLAT}
+REM		popd
 		pushd bin
-		ren MSWin32-${PLAT}-multi-thread Win-${PLAT}
+REM		ren MSWin32-${PLAT}-multi-thread Win-${PLAT}
 		echo Rewriting generated batch files...
         for /F %%F in ('dir /b *.bat') do (
-            powershell -command ""(cat %%F) | %% {$_ -replace '${INSTALL}\\perl\\bin\\MSWin32-${PLAT}-multi-thread\\perl.exe', '\""%%ProgramData%%\bin\perl.exe\""'} | sc %%F""
+REM            powershell -command ""(cat %%F) | %% {$_ -replace '${INSTALL}\\perl\\bin\\MSWin32-${PLAT}-multi-thread\\perl.exe', '\""%%ProgramData%%\bin\perl.exe\""'} | sc %%F""
+            powershell -command ""(cat %%F) | %% {$_ -replace '${INSTALL}\\perl\\bin\\perl.exe', '\""%%ProgramData%%\bin\perl.exe\""'} | sc %%F""
         )
 		
 		popd
@@ -154,7 +158,7 @@ make-perl {
 		CONF="${CONF??Debug}";
 		TEST="${TEST??false}";
 		COMP="${COMP??vc10}";
-		PLAT="${PLATT??x86}";
+		PLAT="${PLAT??x86}";
 	};
 	
 	compiler: "${COMP}";
@@ -185,7 +189,7 @@ make-perl {
 			call :SET_x86
 		)
 		
-		if not defined MSVCDIR set _coapp_bld=%_coapp_bld% CCHOME=$(VCINSTALLDIR)
+		if not defined MSVCDIR set MSVCDIR=%VCINSTALLDIR%
 		if ""${CONF}""==""Debug"" set _coapp_bld=%_coapp_bld% CFG=DEBUG
 		
 		REM determine compiler to specify
@@ -194,14 +198,25 @@ make-perl {
 		if ""${COMP}""==""vc8"" set _coapp_bld=%_coapp_bld% CCType=MSVC80
 		if ""${COMP}""==""vc9"" set _coapp_bld=%_coapp_bld% CCType=MSVC90
 		if ""${COMP}""==""vc10"" set _coapp_bld=%_coapp_bld% CCType=MSVC100
-		
+        
 		if defined INSTALL call :DRIVE
+        
+        REM if ""${TEST}""==""true"" set _coapp_bld=%_coapp_bld% test
 
 		if defined DRYRUN goto :DRY_RUN
-		
+        
 		pushd win32
-		nmake %_coapp_bld% || goto failed
-		if ""${TEST}""==""true"" nmake test || goto failed
+        
+        if ""${BUILT}"" neq ""true"" (
+            if defined INSTALL ( 
+                nmake %_coapp_bld% install || goto failed
+            ) else (
+                nmake %_coapp_bld% || goto failed
+            )
+        )
+		if ""${TEST}""==""true"" (
+            nmake %_coapp_bld% test
+        )
 		popd
         
 		
@@ -230,7 +245,7 @@ make-perl {
 		goto :PERL_DONE
 		
 		:DRIVE
-		set _coapp_bld=%_coapp_bld% INST_DRV=${INSTALL} install
+		set _coapp_bld=%_coapp_bld% INST_DRV=${INSTALL}
 		mkdir output\${COMP}\${PLAT}\${CONF}
 		subst ${INSTALL} .\output\${COMP}\${PLAT}\${CONF}
 		goto :eof

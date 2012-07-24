@@ -15,6 +15,15 @@ Configure		Portability tool
 configure.com		Configure-equivalent for VMS
 configure.gnu		Crude emulation of GNU configure
 cop.h			Control operator header
+COPKG/.buildinfo				CoApp build files
+COPKG/outercurve.inc			CoApp build files
+COPKG/perl.autopkg				CoApp build files
+COPKG/perl-dev.autopkg			CoApp build files
+COPKG/perl-dev-common.autopkg	CoApp build files
+COPKG/perl-monolithic.autopkg	CoApp build files
+COPKG/perl_fail.autopkg			CoApp build files
+COPKG/perl_working1.autopkg		CoApp build files
+COPKG/version.inc				CoApp build files
 Copying			The GNU General Public License
 cpan/Archive-Extract/lib/Archive/Extract.pm	Archive::Extract
 cpan/Archive-Extract/t/01_Archive-Extract.t	Archive::Extract tests
