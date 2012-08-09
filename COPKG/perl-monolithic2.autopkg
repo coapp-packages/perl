@@ -1,0 +1,178 @@
+@import "version.inc";
+@import "outercurve.inc";
+
+/* These must ALWAYS look for lower-case variables if we want to collect
+    values from the command-line.
+ */
+#define { 
+    flavor: "${comp??vc10}"; 
+    arch : "${plat??x86}";
+}
+
+package {
+    name: "perl-monolithic[${flavor}]";
+    version: "${package-version}";
+    arch : "${arch}";
+    
+    display-name: "Perl 5.16";
+    location: "http://coapp.org/repository/${OutputFilename}";
+
+    feed: "http://coapp.org/repository/packages.atom.xml";
+    publisher: "CoApp Project";
+}
+
+files[exes] {
+    root: @"..\output\${flavor}\${arch}\Release\perl\bin";
+    
+    include: {
+				"*.exe",
+//				"perl.exe",
+//				"wperl.exe",
+//				"perl5.14.2.exe",
+    };
+    
+    trim-path: minimal;
+};
+
+/*
+files[statics] {
+    root: @"..\output\${flavor}\${arch}\Release\perl\bin";
+    
+    include: {
+				"perl-static.exe",
+				"perlglob.exe",
+				"a2p.exe",
+    };
+    
+    trim-path: minimal;
+};
+*/
+
+files[dlls] {
+    root: @"..\output\${flavor}\${arch}\Release\perl\bin";
+  
+    include: {
+				"*.dll",
+    };
+    
+    trim-path: all;
+};
+
+files[batch] {
+    root: @"..\output\${flavor}\${arch}\Release\perl\bin";
+    
+    include: {
+				"*.bat",
+    };
+    
+    trim-path: minimal;
+	destination: @".\bin";
+};
+
+files[modules] {
+    root: @"..\output\${flavor}\${arch}\Release\perl\lib";
+    
+    include: {
+				"**",
+    };
+    
+    trim-path: minimal;
+	destination: @".\lib";
+};
+
+files[docs] {
+    root: @"..\output\${flavor}\${arch}\Release\perl\html";
+    
+    include: {
+				"**",
+    };
+    
+    trim-path: minimal;
+	destination: @".\html";
+};
+
+license[GPL1] {
+    license-url: "http://perldoc.perl.org/perlgpl.html";
+    license-type: "GPL-1.0";
+}
+
+provides {
+    feature: "perl" = "5.16.0";
+}
+
+compatability-policy {
+    minimum: "5.14.0.0";
+    maximum: "${OneLessThanCurrent}"; // this is the default
+}
+
+metadata {
+    summary: "Perl 5";
+	description: @"This is a monolithic package for Perl 5.  This is being made available for test and development only, and should not be used in a procudtion environment.  This package is intended to be temporary and will not be maintained.  If possible, please seek an alternate package for Perl 5.";
+    icon: @"..\win32\perlexe.ico";
+
+    author-version : "5.16.0";
+    bug-tracker: "https://github.com/coapp-packages/perl/issues";
+    stability : "-10";
+    licenses : {
+        GPL1
+    };
+}
+
+application {
+    include : {
+        exes,
+//        statics,
+        batch,
+        modules,
+        docs
+    };
+}
+
+ assembly[perl-monolithic[${flavor}]] {
+    include : {
+        dlls
+    };
+}
+
+manifest[things-that-need-them] {
+    // all of our (non-staic) EXEs need to get the manifest entries for the assemblies we're creating in this package
+    
+    assembly : {
+	 "perl-monolithic[${flavor}]"
+    };
+    
+    include : { 
+        exes
+    };
+}
+
+package-composition {
+    symlinks : { 
+        exes => @"${bin}\${each.Name}" = @"${packagedir}\${each.Name}";
+//        statics => @"${bin}\${each.Name}" = @"${packagedir}\${each.Name}";
+    };
+    
+    
+    registry : {
+        @"Perl" = @"${packagedir}",
+        @"Perl#BinDir" = @"${packagedir}",
+		@"Perl#PERLLIB" = @"${packagedir}\lib;",
+    };
+    
+}
+
+signing {
+    attributes : {
+        company="Outercurve Foundation",
+        description="${Package.PackageDetails.SummaryDescription}",
+        product-name="perl",
+        product-version="${package-version}",
+        file-version="${package-version}",
+    };
+    replace-signature: true;
+    include: {
+        exes,
+//        statics,
+        dlls
+    };
+}
