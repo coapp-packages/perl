@@ -17,7 +17,7 @@
 test {
 	default: false;
 // Temporarily disabling this.
-	set: TEST=true;
+//	set: TEST=true;
 	uses: release;
 };
 
